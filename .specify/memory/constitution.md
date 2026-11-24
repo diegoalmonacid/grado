@@ -1,62 +1,81 @@
 <!--
 Sync Impact Report
-- Version change: (template, unversioned) → 1.0.0
-- Modified principles: none (all principles newly defined)
-- Added sections: Core Principles I–V, Restricciones Técnicas, Flujo de Desarrollo, Governance
-- Removed sections: none
-- Follow-up TODOs: none. Ratification date set to the date of adoption (2026-11-17).
+- Version change: (plantilla sin completar) → 1.0.0
+- Principios agregados: I. Fidelidad a la fuente; II. Desarrollo guiado por specs; III. Simplicidad;
+  IV. Costo cero; V. Datos privados fuera del repo; VI. Calidad verificable;
+  VII. Experiencia del estudiante
+- Secciones agregadas: Restricciones Adicionales; Flujo de Desarrollo; Governance (completa)
+- Secciones eliminadas: ninguna
+- TODOs diferidos: ninguno
 -->
 # Examen de Grado IA Constitution
 
 ## Core Principles
 
-### I. Respuestas de IA con Fuente Citada (NON-NEGOTIABLE)
-Toda respuesta generada por IA MUST citar su fuente (artículo o apunte) de forma explícita y
-verificable. Si no existe una fuente que respalde la respuesta, la IA MUST decirlo de forma
-explícita y MUST NOT presentar la respuesta como fundada. Una respuesta sin fuente ni aviso de
-ausencia de fuente se considera un defecto.
+### I. Fidelidad a la fuente (NO NEGOCIABLE)
+Toda respuesta jurídica MUST basarse únicamente en el material recuperado (apuntes y preguntas de
+exámenes anteriores) y MUST citar la sección de origen. Si el material recuperado es insuficiente,
+el sistema MUST decirlo explícitamente en vez de inventar o completar con conocimiento del modelo.
+Una respuesta sin cita o sin respaldo en el material recuperado es un defecto bloqueante.
 
-Razón: es una herramienta de estudio para un examen de grado; una respuesta sin respaldo puede
-enseñar contenido erróneo.
+Razón: un estudiante que memoriza una respuesta jurídica inventada puede reprobar el examen.
 
-### II. TypeScript Estricto
-Todo el código MUST escribirse en TypeScript con `strict: true`. El uso de `any` o de supresiones
-(`@ts-ignore`, `@ts-expect-error`) MUST justificarse por escrito en el código. El código MUST
-compilar sin errores de tipos.
+### II. Desarrollo guiado por specs
+Nada se implementa sin `spec.md`, `plan.md` y `tasks.md` mergeados en `specs/<feature>/`. Una spec
+MUST NOT aprobarse con marcadores `[NEEDS CLARIFICATION]` pendientes. Las historias de usuario
+MUST salir del refinamiento (`/speckit.specify` y `/speckit.clarify`), no definirse antes de él.
+Si la spec es ambigua durante la implementación, se detiene el trabajo y se pregunta en el PR.
 
-### III. Tests para la Lógica de Evaluación
-Toda lógica de evaluación (corrección de respuestas, puntajes, cálculo de resultados, validación
-de citas/fuentes) MUST tener tests automatizados que pasen antes de integrar el cambio. Los tests
-MUST escribirse junto con la lógica; un cambio en la lógica de evaluación sin tests se rechaza.
+### III. Simplicidad
+Se MUST elegir la solución más simple que cumpla la spec. Toda dependencia nueva MUST justificarse
+en `plan.md`; sin justificación, no se agrega.
 
-### IV. Mobile-First y Accesible
-Las interfaces MUST diseñarse primero para pantallas móviles y escalar a pantallas mayores. MUST
-cumplir WCAG 2.1 nivel AA: navegación por teclado, contraste suficiente, etiquetas para lectores
-de pantalla y objetivos táctiles utilizables.
+### IV. Costo cero
+Todo el sistema MUST caber en planes gratuitos (hosting, base de datos, modelos, CI). El acceso a
+modelos MUST pasar por una única capa, `src/lib/ai`, usando Vercel AI SDK; ningún otro módulo llama
+directamente a un proveedor de IA.
 
-### V. Interfaz en Español de Chile
-Todo texto visible al usuario (interfaz, mensajes de error, respuestas de la IA) MUST estar en
-español de Chile. Los términos y el registro MUST ser coherentes en toda la aplicación.
+### V. Datos privados fuera del repo
+El repositorio es público. Los apuntes, preguntas de examen y cualquier material fuente MUST NOT
+commitearse (viven en `data/`, ignorado por git). Los secretos MUST vivir solo en variables de
+entorno (`.env.local`), documentadas sin valores en `.env.example`.
 
-## Restricciones Técnicas
+### VI. Calidad verificable
+El código MUST usar TypeScript estricto. La lógica nueva MUST tener tests con Vitest. El RAG MUST
+tener evals mínimos en `evals/`. Un PR solo se mergea con CI en verde (lint, typecheck, test y
+build).
 
-- Lenguaje: TypeScript en modo estricto (Principio II).
-- Idioma de la interfaz: es-CL (Principio V).
-- Toda funcionalidad que use IA MUST pasar por el mecanismo de citación de fuentes (Principio I).
+### VII. Experiencia del estudiante
+Los textos de UI MUST estar en español de Chile. El diseño MUST ser mobile-first. Las respuestas de
+IA MUST entregarse en streaming. La UI MUST construirse solo con Tailwind CSS y shadcn/ui.
+
+## Restricciones Adicionales
+
+- Stack: Next.js (App Router), TypeScript estricto, Tailwind CSS, shadcn/ui, Vercel AI SDK, Vitest.
+- Validación de entradas en route handlers con Zod.
+- Server Components por defecto; `"use client"` solo cuando sea necesario.
+- Nombres de código en inglés; los comentarios pueden estar en español.
 
 ## Flujo de Desarrollo
 
-- Cada feature MUST rastrearse en Jira, proyecto **EXG**, mediante su issue correspondiente.
-- El flujo sigue Spec Kit: especificación, plan, tareas e implementación.
-- Todo PR MUST verificar el cumplimiento de esta constitución: tipos estrictos, tests de lógica de
-  evaluación, citación de fuentes, accesibilidad e idioma.
+- Una rama por ticket, nombrada `APP-<n>-<descripcion-corta>`; commits y título de PR comienzan con
+  la key (`APP-12: ...`).
+- Nunca se hace push a `main`; todo cambio entra por PR.
+- Cada feature tiene dos PRs: uno de spec (`spec.md`, `plan.md`, `tasks.md`) y uno de
+  implementación, que referencia la spec e incluye resumen y cómo probar.
+- Cada `plan.md` MUST incluir un Constitution Check que verifique los principios I–VII.
 
 ## Governance
 
-Esta constitución prevalece sobre otras prácticas del proyecto. Las enmiendas MUST documentarse en
-este archivo, con actualización de versión y fecha, y ser aprobadas por el responsable del
-proyecto. El versionado es semántico: MAJOR para eliminación o redefinición incompatible de
-principios, MINOR para nuevos principios o ampliación material, PATCH para aclaraciones. El
-cumplimiento se revisa en cada PR y en cada plan de feature (Constitution Check).
+Esta constitución prevalece sobre cualquier otra práctica del proyecto.
 
-**Version**: 1.0.0 | **Ratified**: 2026-11-17 | **Last Amended**: 2026-11-17
+- Enmiendas: solo vía PR que modifique este archivo, con justificación y revisión previa al merge.
+  Si la enmienda afecta specs o planes existentes, el PR MUST indicar cómo migrarlos.
+- Versionado semántico: MAJOR por eliminar o redefinir principios de forma incompatible; MINOR por
+  agregar un principio o sección, o ampliar materialmente la guía; PATCH por aclaraciones y
+  correcciones de redacción.
+- Cumplimiento: todo PR MUST verificar el cumplimiento de esta constitución; las desviaciones MUST
+  justificarse en `plan.md`. `CLAUDE.md` es la guía operativa y MUST mantenerse coherente con este
+  documento.
+
+**Version**: 1.0.0 | **Ratified**: 2026-11-24 | **Last Amended**: 2026-11-24

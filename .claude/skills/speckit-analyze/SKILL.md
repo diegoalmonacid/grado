@@ -6,7 +6,7 @@ compatibility: "Requires spec-kit project structure with .specify/ directory"
 metadata:
   author: "github-spec-kit"
   source: "templates/commands/analyze.md"
-  version: "1.4.3.dev0"
+  version: "1.4.5.dev0"
 user-invocable: true
 disable-model-invocation: false
 ---
