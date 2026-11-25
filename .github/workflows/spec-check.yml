@@ -1,0 +1,76 @@
+name: Spec check
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  spec-check:
+    name: spec-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Título con key de Jira
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          if ! echo "$TITLE" | grep -Eq '^APP-[0-9]+'; then
+            echo "::error::El título del PR debe empezar con la key de Jira (ej: APP-12: ...)"
+            exit 1
+          fi
+
+      - name: Detectar archivos cambiados
+        id: changes
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git diff --name-only "$BASE"...HEAD > changed.txt
+          cat changed.txt
+          SPEC_DIRS=$(grep -E '^specs/[^/]+/' changed.txt | cut -d/ -f1-2 | sort -u | tr '\n' ' ')
+          CODE=$(grep -Eq '^src/' changed.txt && echo true || echo false)
+          echo "spec_dirs=$SPEC_DIRS" >> "$GITHUB_OUTPUT"
+          echo "code=$CODE" >> "$GITHUB_OUTPUT"
+
+      - name: PR de spec completo y sin dudas abiertas
+        if: steps.changes.outputs.spec_dirs != ''
+        env:
+          SPEC_DIRS: ${{ steps.changes.outputs.spec_dirs }}
+        run: |
+          fail=0
+          for dir in $SPEC_DIRS; do
+            [ -d "$dir" ] || continue
+            for f in spec.md plan.md tasks.md; do
+              if [ ! -f "$dir/$f" ]; then
+                echo "::error::Falta $dir/$f"
+                fail=1
+              fi
+            done
+            if grep -rn "NEEDS CLARIFICATION" "$dir"; then
+              echo "::error::$dir todavía tiene [NEEDS CLARIFICATION]"
+              fail=1
+            fi
+          done
+          exit $fail
+
+      - name: PR de código apunta a una spec aprobada
+        if: steps.changes.outputs.code == 'true'
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          SPEC=$(echo "$BODY" | grep -oE 'specs/[A-Za-z0-9._-]+' | head -n1)
+          if [ -z "$SPEC" ]; then
+            echo "::error::El PR debe indicar su spec en la descripción (ej: Spec: specs/001-chat-apuntes)"
+            exit 1
+          fi
+          if ! git cat-file -e "origin/main:$SPEC/spec.md" 2>/dev/null; then
+            echo "::error::$SPEC no existe en main: la spec debe estar mergeada antes de implementar"
+            exit 1
+          fi
+          echo "Spec aprobada: $SPEC"
