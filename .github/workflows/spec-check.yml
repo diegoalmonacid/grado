@@ -2,7 +2,7 @@ name: Spec check
 
 on:
   pull_request:
-    types: [opened, edited, synchronize, reopened]
+    types: [opened, edited, synchronize, reopened, labeled, unlabeled]
 
 permissions:
   contents: read
@@ -60,7 +60,7 @@ jobs:
           exit $fail
 
       - name: PR de código apunta a una spec aprobada
-        if: steps.changes.outputs.code == 'true'
+        if: steps.changes.outputs.code == 'true' && !contains(github.event.pull_request.labels.*.name, 'sin-spec')
         env:
           BODY: ${{ github.event.pull_request.body }}
         run: |
