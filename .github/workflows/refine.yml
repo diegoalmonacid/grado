@@ -66,3 +66,7 @@ jobs:
             4. Publica las preguntas numeradas como comentario en el PR (`gh pr comment`),
                con opciones sugeridas cuando ayuden, y pide responder con @claude.
             No ejecutes speckit.plan ni speckit.tasks todavía.
+        env:
+          JIRA_BASE_URL: ${{ vars.JIRA_BASE_URL }}
+          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}

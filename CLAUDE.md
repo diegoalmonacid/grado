@@ -67,3 +67,14 @@ Spec Kit crea sus propias ramas (ej: `001-chat-apuntes`); acéptalas. La key de 
 ## Etiquetas
 Nunca agregues la etiqueta `sin-spec`; solo la usuaria puede hacerlo.
  
+## Jira
+- El proyecto de Jira usa la key `APP`. Para leer o escribir tickets usa `scripts/jira.sh` (no llames a la API de Jira de otra forma).
+- Al empezar a refinar un ticket, lee la idea original con `scripts/jira.sh get APP-<n>`.
+- Cuando una spec quede sin `[NEEDS CLARIFICATION]` y tenga plan.md y tasks.md:
+  1. Escribe en un archivo temporal la historia de usuario final:
+     "Como <rol>, quiero <acción>, para <beneficio>.", seguida de los criterios de aceptación
+     (lista) y la línea "Spec: <link a specs/<carpeta>/spec.md en GitHub>".
+  2. Reemplaza la descripción del ticket: `scripts/jira.sh describe APP-<n> <archivo>`.
+  3. Comenta en el ticket el link al PR de spec.
+- No muevas tickets de estado: eso lo hace el workflow jira-sync.
+ 

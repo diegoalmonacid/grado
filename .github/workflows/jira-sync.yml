@@ -1,0 +1,56 @@
+name: Jira sync
+
+# Mueve el ticket de Jira según el ciclo de vida del PR (sin gastar ejecuciones de Jira Automation).
+#   PR de spec abierto        → Spec en revisión
+#   PR de spec mergeado       → Implementando
+#   PR de código abierto      → En revisión
+#   PR de código mergeado     → Hecho
+
+on:
+  pull_request:
+    types: [opened, reopened, closed]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  sync:
+    if: github.event.action != 'closed' || github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    env:
+      JIRA_BASE_URL: ${{ vars.JIRA_BASE_URL }}
+      JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+      JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+      GH_TOKEN: ${{ github.token }}
+      TITLE: ${{ github.event.pull_request.title }}
+      PR: ${{ github.event.pull_request.number }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Calcular estado destino
+        id: s
+        run: |
+          KEY=$(echo "$TITLE" | grep -oE '^APP-[0-9]+' || true)
+          if [ -z "$KEY" ]; then echo "PR sin key de Jira; nada que hacer."; exit 0; fi
+          FILES=$(gh pr diff "$PR" --name-only)
+          if echo "$FILES" | grep -q '^src/'; then TYPE=code; else
+            if echo "$FILES" | grep -q '^specs/'; then TYPE=spec; else TYPE=other; fi
+          fi
+          case "$TYPE-${{ github.event.action }}" in
+            spec-opened|spec-reopened) TARGET="Spec en revisión" ;;
+            spec-closed)               TARGET="Implementando" ;;
+            code-opened|code-reopened) TARGET="En revisión" ;;
+            code-closed)               TARGET="Hecho" ;;
+            *)                         TARGET="" ;;
+          esac
+          echo "key=$KEY" >> "$GITHUB_OUTPUT"
+          echo "target=$TARGET" >> "$GITHUB_OUTPUT"
+          echo "$KEY ($TYPE) → ${TARGET:-sin cambio}"
+
+      - name: Mover ticket
+        if: steps.s.outputs.target != ''
+        run: |
+          chmod +x scripts/jira.sh
+          scripts/jira.sh transition "${{ steps.s.outputs.key }}" "${{ steps.s.outputs.target }}"
+          scripts/jira.sh comment "${{ steps.s.outputs.key }}" "PR #$PR: ${{ github.event.pull_request.html_url }} → ${{ steps.s.outputs.target }}"
