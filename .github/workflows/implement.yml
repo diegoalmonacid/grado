@@ -1,0 +1,82 @@
+name: Implementar spec aprobada
+
+# Al mergear un PR de spec (toca specs/ y no toca src/), implementa la feature y abre el PR de código.
+
+on:
+  push:
+    branches: [main]
+    paths: ["specs/**"]
+
+concurrency:
+  group: implement-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      spec: ${{ steps.d.outputs.spec }}
+      key: ${{ steps.d.outputs.key }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - id: d
+        run: |
+          CHANGED=$(git diff --name-only HEAD~1 HEAD)
+          echo "$CHANGED"
+          # Si el merge trae código, es un PR de implementación: no volver a implementar.
+          if echo "$CHANGED" | grep -q '^src/'; then
+            echo "Merge de implementación; se omite."
+            exit 0
+          fi
+          SPEC=$(echo "$CHANGED" | grep -E '^specs/[^/]+/' | cut -d/ -f1-2 | sort -u | head -n1)
+          KEY=$(git log -1 --pretty=%s | grep -oE '^APP-[0-9]+' || true)
+          if [ -n "$SPEC" ] && [ -f "$SPEC/tasks.md" ]; then
+            echo "spec=$SPEC" >> "$GITHUB_OUTPUT"
+            echo "key=$KEY" >> "$GITHUB_OUTPUT"
+          fi
+
+  implement:
+    needs: detect
+    if: needs.detect.outputs.spec != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: |
+            --max-turns 120
+            --allowedTools "Bash,Read,Write,Edit,MultiEdit,Glob,Grep"
+          prompt: |
+            La spec ${{ needs.detect.outputs.spec }} (ticket ${{ needs.detect.outputs.key }}) fue aprobada y mergeada.
+            1. Crea la rama "${{ needs.detect.outputs.key }}-impl" desde main.
+            2. Ejecuta el comando de Spec Kit speckit.implement (definido en .claude/) sobre esa spec,
+               siguiendo tasks.md en orden.
+            3. Antes de abrir el PR corre: npm run lint, npm run typecheck, npm run test, npm run build.
+               Si algo falla, corrígelo.
+            4. Haz commit y push, y abre el PR con `gh pr create` según CLAUDE.md:
+               título "${{ needs.detect.outputs.key }}: <descripción>", Tipo: Implementación,
+               "Spec: ${{ needs.detect.outputs.spec }}" y pasos de "Cómo probar".
+            Si encuentras una ambigüedad que no puedes resolver con la spec, abre el PR igual
+            como borrador (--draft) y explica la duda en un comentario.

@@ -51,3 +51,19 @@ Antes de abrir un PR, corre lint, typecheck, test y build; todos deben pasar.
 - Cumple los criterios de aceptación de la spec.
 - Tests nuevos para la lógica agregada; evals del RAG pasan si aplica.
 - CI en verde y PR con instrucciones para probar en el preview.
+
+## Refinamiento asíncrono (desde GitHub)
+Cuando trabajes desde GitHub Actions, la usuaria no puede responder en tiempo real. Por eso:
+- Las dudas se marcan en spec.md con `[NEEDS CLARIFICATION: ...]` y se publican como comentario numerado en el PR.
+- Cuando la usuaria responda con @claude en el PR:
+  1. Integra sus respuestas en spec.md y elimina los marcadores resueltos.
+  2. Si surgen nuevas dudas importantes, vuelve a preguntar (máximo 5 por ronda).
+  3. Si ya no quedan marcadores, ejecuta speckit.plan y speckit.tasks y haz push al mismo PR.
+  4. Comenta un resumen: historia de usuario final, criterios de aceptación y decisiones del plan.
+- Nunca respondas tú mismo una pregunta de clarificación.
+## Ramas
+Spec Kit crea sus propias ramas (ej: `001-chat-apuntes`); acéptalas. La key de Jira va siempre en el título del PR y en los commits.
+ 
+## Etiquetas
+Nunca agregues la etiqueta `sin-spec`; solo la usuaria puede hacerlo.
+ 
