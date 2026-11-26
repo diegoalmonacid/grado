@@ -25,8 +25,12 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       TITLE: ${{ github.event.pull_request.title }}
       PR: ${{ github.event.pull_request.number }}
+      BODY: ${{ github.event.pull_request.body }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Tras el merge, leer tasks.md desde main ya actualizado.
+          ref: ${{ github.event.action == 'closed' && github.event.pull_request.base.ref || '' }}
 
       - name: Calcular estado destino
         id: s
@@ -41,7 +45,14 @@ jobs:
             spec-opened|spec-reopened) TARGET="Spec en revisión" ;;
             spec-closed)               TARGET="Implementando" ;;
             code-opened|code-reopened) TARGET="En revisión" ;;
-            code-closed)               TARGET="Hecho" ;;
+            code-closed)
+              # Si quedan historias pendientes, el ticket sigue en Implementando.
+              SPEC=$(echo "$BODY" | grep -oE 'specs/[A-Za-z0-9._-]+' | head -n1)
+              LEFT=0
+              if [ -n "$SPEC" ] && [ -f "$SPEC/tasks.md" ]; then
+                LEFT=$(python3 scripts/stories.py remaining "$SPEC/tasks.md")
+              fi
+              if [ "$LEFT" -gt 0 ]; then TARGET="Implementando"; else TARGET="Hecho"; fi ;;
             *)                         TARGET="" ;;
           esac
           echo "key=$KEY" >> "$GITHUB_OUTPUT"

@@ -74,3 +74,16 @@ jobs:
             exit 1
           fi
           echo "Spec aprobada: $SPEC"
+
+          # Un PR por historia: el lote pendiente en main debe quedar completo en este PR.
+          git show "origin/main:$SPEC/tasks.md" > base_tasks.md 2>/dev/null || exit 0
+          python3 scripts/stories.py next base_tasks.md > batch.txt
+          if [ ! -s batch.txt ]; then
+            echo "La spec ya está completa; se acepta como PR de corrección."
+            exit 0
+          fi
+          echo "Lote esperado en este PR:"; cat batch.txt
+          if ! python3 scripts/stories.py check "$SPEC/tasks.md" batch.txt; then
+            echo "::error::Este PR debe completar (marcar con [X]) todas las tareas del lote $(head -n1 batch.txt)"
+            exit 1
+          fi
