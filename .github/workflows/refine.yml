@@ -1,0 +1,68 @@
+name: Refinar idea (Spec Kit)
+
+# Modo asíncrono: toma una idea, genera el borrador de spec y abre un PR con preguntas.
+# Se dispara desde Jira (fase 4) o a mano desde la pestaña Actions.
+
+on:
+  repository_dispatch:
+    types: [jira-refine]
+  workflow_dispatch:
+    inputs:
+      key:
+        description: "Key de Jira (ej: APP-1)"
+        required: true
+      idea:
+        description: "Idea en bruto"
+        required: true
+
+concurrency:
+  group: refine-${{ github.event.client_payload.key || inputs.key }}
+  cancel-in-progress: false
+
+jobs:
+  refine:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+    env:
+      KEY: ${{ github.event.client_payload.key || inputs.key }}
+      IDEA: ${{ github.event.client_payload.idea || inputs.idea }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: |
+            --max-turns 60
+            --allowedTools "Bash,Read,Write,Edit,MultiEdit,Glob,Grep"
+          prompt: |
+            Ticket de Jira: ${{ env.KEY }}
+            Idea en bruto de la usuaria:
+            """
+            ${{ env.IDEA }}
+            """
+
+            Sigue la sección "Refinamiento asíncrono" de CLAUDE.md:
+            1. Ejecuta el comando de Spec Kit speckit.specify (definido en .claude/) con esta idea.
+            2. Analiza la spec como lo haría speckit.clarify y deja como máximo 5 preguntas,
+               marcadas en spec.md con [NEEDS CLARIFICATION: ...]. No inventes respuestas.
+            3. Haz commit y push de la rama y abre un PR con `gh pr create`:
+               título "${{ env.KEY }}: spec <nombre corto>", cuerpo según .github/pull_request_template.md
+               (Tipo: Spec, Spec: specs/<carpeta>).
+            4. Publica las preguntas numeradas como comentario en el PR (`gh pr comment`),
+               con opciones sugeridas cuando ayuden, y pide responder con @claude.
+            No ejecutes speckit.plan ni speckit.tasks todavía.
