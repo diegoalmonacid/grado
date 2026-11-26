@@ -78,3 +78,13 @@ Nunca agregues la etiqueta `sin-spec`; solo la usuaria puede hacerlo.
   3. Comenta en el ticket el link al PR de spec.
 - No muevas tickets de estado: eso lo hace el workflow jira-sync.
  
+ ## Implementación por historias (un PR por historia de usuario)
+- Al refinar con Spec Kit, divide el requerimiento en historias de usuario independientes y priorizadas (P1, P2...), cada una probable por sí sola. Si una historia necesitaría más de ~15 tareas, divídela.
+- `tasks.md` debe usar fases "## Phase N: User Story N - <título> (Priority: PN)", con Setup y Foundational antes de la primera historia y Polish al final.
+- Nunca implementes más de un lote por PR. Para saber cuál toca: `python3 scripts/stories.py next specs/<carpeta>/tasks.md`.
+  - Primer PR: Setup + Foundational + primera historia.
+  - Luego: un PR por historia.
+  - Al final: Polish en un PR aparte.
+- Marca con [X] en tasks.md cada tarea terminada; el check spec-check exige que el lote del PR quede completo.
+- La descripción del PR incluye `Spec: specs/<carpeta>` y `Historia: <US1|US2|...|polish>`.
+- Esto aplica también en sesiones interactivas: si te pido "implementa la spec", implementa solo el siguiente lote y abre el PR.

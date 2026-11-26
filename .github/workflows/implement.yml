@@ -1,14 +1,25 @@
-name: Implementar spec aprobada
+name: Implementar siguiente historia
 
-# Al mergear un PR de spec (toca specs/ y no toca src/), implementa la feature y abre el PR de código.
+# Implementa una spec aprobada historia por historia: un PR por historia de usuario.
+# - Al mergear el PR de spec → implementa Setup + Foundational + la primera historia.
+# - Al mergear cada PR de historia → implementa la siguiente.
+# - Cuando no quedan tareas pendientes en tasks.md, se detiene.
 
 on:
   push:
     branches: [main]
     paths: ["specs/**"]
+  workflow_dispatch:
+    inputs:
+      spec:
+        description: "Carpeta de la spec (ej: specs/001-chat-apuntes)"
+        required: true
+      key:
+        description: "Key de Jira (ej: APP-1)"
+        required: true
 
 concurrency:
-  group: implement-${{ github.sha }}
+  group: implement-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -19,30 +30,44 @@ jobs:
     outputs:
       spec: ${{ steps.d.outputs.spec }}
       key: ${{ steps.d.outputs.key }}
+      story: ${{ steps.d.outputs.story }}
+      phases: ${{ steps.d.outputs.phases }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 2
 
       - id: d
+        env:
+          IN_SPEC: ${{ inputs.spec }}
+          IN_KEY: ${{ inputs.key }}
         run: |
-          CHANGED=$(git diff --name-only HEAD~1 HEAD)
-          echo "$CHANGED"
-          # Si el merge trae código, es un PR de implementación: no volver a implementar.
-          if echo "$CHANGED" | grep -q '^src/'; then
-            echo "Merge de implementación; se omite."
-            exit 0
+          if [ -n "$IN_SPEC" ]; then
+            SPEC="$IN_SPEC"; KEY="$IN_KEY"
+          else
+            SPEC=$(git diff --name-only HEAD~1 HEAD | grep -E '^specs/[^/]+/' | cut -d/ -f1-2 | sort -u | head -n1)
+            KEY=$(git log -1 --pretty=%s | grep -oE '^APP-[0-9]+' || true)
           fi
-          SPEC=$(echo "$CHANGED" | grep -E '^specs/[^/]+/' | cut -d/ -f1-2 | sort -u | head -n1)
-          KEY=$(git log -1 --pretty=%s | grep -oE '^APP-[0-9]+' || true)
-          if [ -n "$SPEC" ] && [ -f "$SPEC/tasks.md" ]; then
-            echo "spec=$SPEC" >> "$GITHUB_OUTPUT"
-            echo "key=$KEY" >> "$GITHUB_OUTPUT"
+          if [ -z "$SPEC" ] || [ ! -f "$SPEC/tasks.md" ]; then
+            echo "Sin tasks.md; nada que implementar."; exit 0
           fi
+          python3 scripts/stories.py next "$SPEC/tasks.md" > batch.txt
+          if [ ! -s batch.txt ]; then
+            echo "$SPEC no tiene tareas pendientes: feature completa."; exit 0
+          fi
+          cat batch.txt
+          echo "spec=$SPEC" >> "$GITHUB_OUTPUT"
+          echo "key=$KEY" >> "$GITHUB_OUTPUT"
+          echo "story=$(head -n1 batch.txt)" >> "$GITHUB_OUTPUT"
+          {
+            echo "phases<<EOF"
+            tail -n +2 batch.txt | sed 's/^/- /'
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
   implement:
     needs: detect
-    if: needs.detect.outputs.spec != ''
+    if: needs.detect.outputs.story != ''
     runs-on: ubuntu-latest
     timeout-minutes: 90
     permissions:
@@ -63,20 +88,30 @@ jobs:
       - run: npm ci
 
       - uses: anthropics/claude-code-action@v1
+        env:
+          JIRA_BASE_URL: ${{ vars.JIRA_BASE_URL }}
+          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           claude_args: |
             --max-turns 120
             --allowedTools "Bash,Read,Write,Edit,MultiEdit,Glob,Grep"
           prompt: |
-            La spec ${{ needs.detect.outputs.spec }} (ticket ${{ needs.detect.outputs.key }}) fue aprobada y mergeada.
-            1. Crea la rama "${{ needs.detect.outputs.key }}-impl" desde main.
-            2. Ejecuta el comando de Spec Kit speckit.implement (definido en .claude/) sobre esa spec,
-               siguiendo tasks.md en orden.
-            3. Antes de abrir el PR corre: npm run lint, npm run typecheck, npm run test, npm run build.
-               Si algo falla, corrígelo.
-            4. Haz commit y push, y abre el PR con `gh pr create` según CLAUDE.md:
-               título "${{ needs.detect.outputs.key }}: <descripción>", Tipo: Implementación,
-               "Spec: ${{ needs.detect.outputs.spec }}" y pasos de "Cómo probar".
-            Si encuentras una ambigüedad que no puedes resolver con la spec, abre el PR igual
-            como borrador (--draft) y explica la duda en un comentario.
+            Spec aprobada: ${{ needs.detect.outputs.spec }} (ticket ${{ needs.detect.outputs.key }}).
+            Lote a implementar: ${{ needs.detect.outputs.story }}.
+
+            Implementa SOLO las tareas de estas fases de tasks.md, en orden:
+            ${{ needs.detect.outputs.phases }}
+
+            Reglas (ver "Implementación por historias" en CLAUDE.md):
+            1. Crea la rama "${{ needs.detect.outputs.key }}-${{ needs.detect.outputs.story }}" desde main.
+            2. Sigue el comando de Spec Kit speckit.implement (definido en .claude/), pero limitado a esas fases.
+               No toques tareas de otras fases.
+            3. Marca con [X] en tasks.md cada tarea terminada. Todas las tareas del lote deben quedar marcadas.
+            4. Corre npm run lint, npm run typecheck, npm run test y npm run build; corrige lo que falle.
+            5. Abre el PR con `gh pr create` según CLAUDE.md:
+               título "${{ needs.detect.outputs.key }}: ${{ needs.detect.outputs.story }} <descripción>",
+               Tipo: Implementación, "Spec: ${{ needs.detect.outputs.spec }}",
+               "Historia: ${{ needs.detect.outputs.story }}" y pasos de "Cómo probar" para esa historia.
+            Si una tarea es ambigua y la spec no la resuelve, abre el PR como borrador (--draft) y explica la duda.
